@@ -1,0 +1,25 @@
+/*****************************************************************************
+
+FORMULA NAME: ABSENCE_HOURS_FEED_SS_EARN
+
+FORMULA TYPE: Payroll
+
+DESCRIPTION: 
+This is the formula for processing a flat amount earning element. The formula 
+assumes that the amounts and periodicity are available in element entries. 
+For a Salary element, the Salary and Periodicity are available in  element entry, 
+that is created by Oracle Fusion Compensation.
+This formula is created by Global Earnings template.
+
+Formula Results :
+
+ l_value               Direct Result for Earnings Pay Value. 
+ l_reduce              Direct Result for Earnings Reduce Regular Earnings.
+ mesg                  Warning message will be issued for this assignment.
+
+Author         | Date       | Version | Comment
+-------------------------------------------------------------------------------
+HILLIARDI      | 18/07/2017 | 1.0     | Topup changes
+***********************************************************************/
+
+RETURN

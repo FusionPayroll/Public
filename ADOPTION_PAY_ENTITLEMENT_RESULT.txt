@@ -1,0 +1,1215 @@
+/* IH Locked for 1.6 */
+/*****************************************************************************
+FORMULA NAME: ADOPTION_PAY_ENTITLEMENT_RESULT
+FORMULA TYPE: Oracle Payroll
+DESCRIPTION:
+The formula works for entitlement calculator element.
+Call global formula ORA_ENTITLEMENT_CALCULATOR,
+The global formula includes logic to get all CIR value definitions and use them to calculate required result.
+
+HILLIARDI      | 14/11/2016 | 1.1     | added l_hours_worked return
+Vimal k        | 24/11/2016 | 1.2     | added l_Contractual_Non_Premium return
+BARTOND        | 02/12/2016 | 1.3     | added  l_additional_notional_pens_bal, l_additional_notional_pens_comment return
+BARTOND        | 09/01/2017 | 1.4     | Set l_hours_worked to 0 if pay_value 0 add l_hours_offset_worked
+BARTOND        | 22/02/2017 | 1.5     | OTL Mastering changes
+HILLIARDI      | 06/07/2017 | 1.6     | Notional Pension Feed - commented out calculation
+*******************************************************************************/
+
+Default for ee_id            is 0
+
+inputs are dir_card_id (NUMBER),dir_comp_id (NUMBER)
+
+l_log = PAY_INTERNAL_LOG_WRITE('[ADOPTION_PAY_ENTITLEMENT_RESULT] - Enter')
+l_log = PAY_INTERNAL_LOG_WRITE('[ADOPTION_PAY_ENTITLEMENT_RESULT] - Start to call ADOPTION_PAY_ENTITLEMENT_RESULT')
+
+l_hours_worked = 0
+l_Contractual_Non_Premium=0
+
+ee_id  = GET_CONTEXT(ELEMENT_ENTRY_ID, 0)
+IF ee_id = 0 THEN
+(
+    l_log = PAY_INTERNAL_LOG_WRITE('[ADOPTION_PAY_ENTITLEMENT_RESULT] - Element Entry Id context not set')
+    error_mesg = 'Element Entry Id context is not set.'
+    Return error_mesg
+)
+ELSE
+(
+
+    l_log = PAY_INTERNAL_LOG_WRITE('[ADOPTION_PAY_ENTITLEMENT_RESULT] - dir_comp_id  OUTPUT   : '|| to_char(dir_comp_id))
+    l_log = PAY_INTERNAL_LOG_WRITE('[ADOPTION_PAY_ENTITLEMENT_RESULT] - dir_card_id  OUTPUT   : '|| to_char(dir_card_id))
+
+	/* Initialize return value*/
+	reduce_type        = 'RP'	  	/* reduce type */
+	pay_value          = 0			/* calcuation output of Absence Payrment */
+	deduction          = 0			/* calcuation output of Absence Deduction */
+	net_pay            = 0			/* calcuation output of Absence Amount */
+	unit               = 0			/* calcuation output of Absence Unit */
+    rate               = 0			/* calcuation output of Absence Rate */
+    factor             = 0	        /* calcuation output of Absence Factor */
+    ded_amount_rate    = 0			/* calcuation output of Absence Deduction Amount Rate */
+
+
+	l_log = PAY_INTERNAL_LOG_WRITE('[ADOPTION_PAY_ENTITLEMENT_RESULT] - Start to call TESCO_FAMILY_ABS_PAY_ORA_ENTITLEMENT_CALCULATOR')
+	l_log = PAY_INTERNAL_LOG_WRITE('[ADOPTION_PAY_ENTITLEMENT_RESULT] - Element Entry ID INPUT 	: '|| to_char(ee_id))
+
+
+	call_formula('TESCO_FAMILY_ABS_PAY_ORA_ENTITLEMENT_CALCULATOR',
+                ee_id                  > 'in_ee_id' ,
+                dir_card_id            > 'in_dir_card_id' ,
+                dir_comp_id            > 'in_dir_comp_id' ,
+               'SAP'                   > 'in_stat_absence_type',  
+                unit                   < 'out_unit' default -1 ,
+                rate                   < 'out_absence_rate' default -1 ,
+                ded_amount_rate        < 'out_ded_amount_rate' default -1 ,
+                factor                 < 'out_absence_factor' default -1 ,
+                reduce_type            < 'out_reduce_type' default 'RP',
+                pay_value              < 'out_absence_payment' default -1,
+                l_emp_absence_payment   < 'out_emp_absence_payment' default 0,
+                deduction              < 'out_absence_deduction' default -1,
+                l_emp_absence_deduction < 'out_emp_absence_deduction' default 0,
+                net_pay                < 'out_absence_amount' default -1,
+                week                   < 'out_week' default -1,
+                l_hours_worked         < 'out_hours_worked' default 0,
+                l_Contractual_Non_Premium < 'out_contractual_non_premium_amount' default 0,
+                l_additional_notional_pens_bal < 'out_additional_notional_pens_bal' default 0,
+                l_additional_notional_pens_comment < 'out_additional_notional_pens_comment' default ' ',
+                l_colleague_type					  < 'out_colleague_type' Default 'OTL',
+                l_salary_deduction 				  < 'out_salary_deduction' Default 0,
+                l_location_deduction 			  < 'out_location_deduction' Default 0,
+                l_mrkt_supp_deduction			  < 'out_mrkt_supp_deduction' Default 0,
+                l_mrkt_supp_mgmt_deduction 	  < 'out_mrkt_supp_mgmt_deduction' Default 0,
+                l_dep_supp_deduction 			  < 'out_dep_supp_deduction' Default 0,
+                l_first_aid_deduction			  < 'out_first_aid_deduction' Default 0,
+                l_night_supp_deduction 			  < 'out_night_supp_deduction' Default 0,
+                l_dist_supp_deduction			  < 'out_dist_supp_deduction' Default 0,
+                l_bank_hol_supp_deduction		  < 'out_bank_hol_supp_deduction' Default 0,
+                l_protected_ele_deduction		  < 'out_protected_ele_deduction' Default 0,
+                l_personal_rate_deduction		  < 'out_personal_rate_deduction' Default 0,
+                l_night_premium_deduction		  < 'out_night_premium_deduction' Default 0,
+                l_sun_premium_deduction			  < 'out_sun_premium_deduction' Default 0,
+                l_extra_night_premium_deduction < 'out_extra_night_premium_deduction' Default 0,
+                l_bank_hol_premium_deduction 	  < 'out_bank_hol_premium_deduction' Default 0,
+                l_sal_ded_rate 					  < 'out_sal_ded_rate' Default 0,
+                l_location_ded_rate				  < 'out_location_ded_rate' Default 0,
+                l_mrkt_supp_ded_rate 			  < 'out_mrkt_supp_ded_rate' Default 0,
+                l_mrkt_supp_mgmt_ded_rate		  < 'out_mrkt_supp_mgmt_ded_rate' Default 0,
+                l_dep_supp_ded_rate				  < 'out_dep_supp_ded_rate' Default 0,
+                l_first_aid_ded_rate 			  < 'out_first_aid_ded_rate' Default 0,
+                l_night_supp_ded_rate			  < 'out_night_supp_ded_rate' Default 0,
+                l_dist_supp_ded_rate 			  < 'out_dist_supp_ded_rate' Default 0,
+                l_bank_hol_supp_ded_rate 		  < 'out_bank_hol_supp_ded_rate' Default 0,
+                l_protected_ele_ded_rate 		  < 'out_protected_ele_ded_rate' Default 0,
+                l_personal_rate_ded_rate 		  < 'out_personal_rate_ded_rate' Default 0,
+                l_night_premium_ded_rate 		  < 'out_night_premium_ded_rate' Default 0,
+                l_sun_premium_ded_rate 			  < 'out_sun_premium_ded_rate' Default 0,
+                l_extra_night_premium_ded_rate  < 'out_extra_night_premium_ded_rate' Default 0,
+                l_bank_hol_premium_ded_rate	  < 'out_bank_hol_premium_ded_rate' Default 0,
+                l_salary_ded_units				  < 'out_salary_ded_units' Default 0,
+                l_location_ded_units				  < 'out_location_ded_units' Default 0,
+                l_mrkt_supp_ded_units 			  < 'out_mrkt_supp_ded_units' Default 0,
+                l_mrkt_supp_mgmt_ded_units		  < 'out_mrkt_supp_mgmt_ded_units' Default 0,
+                l_dep_supp_ded_units				  < 'out_dep_supp_ded_units' Default 0,
+                l_first_aid_ded_units 			  < 'out_first_aid_ded_units' Default 0,
+                l_night_supp_ded_units			  < 'out_night_supp_ded_units' Default 0,
+                l_dist_supp_ded_units 			  < 'out_dist_supp_ded_units' Default 0,
+                l_bank_hol_supp_ded_units 		  < 'out_bank_hol_supp_ded_units' Default 0,
+                l_protected_ele_ded_units 		  < 'out_protected_ele_ded_units' Default 0,
+                l_personal_rate_ded_units 		  < 'out_personal_rate_ded_units' Default 0,
+                l_night_premium_ded_units 		  < 'out_night_premium_ded_units' Default 0,
+                l_sun_premium_ded_units 		  < 'out_sun_premium_ded_units' Default 0,
+                l_extra_night_premium_ded_units < 'out_extra_night_premium_ded_units' Default 0,
+                l_bank_hol_premium_ded_units	  < 'out_bank_hol_premium_ded_units' Default 0,
+                l_sun_supp_deduction          < 'out_sun_supp_deduction' Default 0,
+                l_sun_supp_ded_rate           < 'out_sun_supp_ded_rate' Default 0,
+                l_sun_supp_ded_units	       < 'out_sun_supp_ded_units' Default 0
+        )
+
+	l_log = PAY_INTERNAL_LOG_WRITE('[ADOPTION_PAY_ENTITLEMENT_RESULT] - Unit               OUTPUT   : '|| to_char(unit))
+    l_log = PAY_INTERNAL_LOG_WRITE('[ADOPTION_PAY_ENTITLEMENT_RESULT] - Rate               OUTPUT   : '|| to_char(rate))
+    l_log = PAY_INTERNAL_LOG_WRITE('[ADOPTION_PAY_ENTITLEMENT_RESULT] - Deduction Rate     OUTPUT   : '|| to_char(ded_amount_rate))
+	l_log = PAY_INTERNAL_LOG_WRITE('[ADOPTION_PAY_ENTITLEMENT_RESULT] - Reduce Type        OUTPUT   : '|| reduce_type)
+	l_log = PAY_INTERNAL_LOG_WRITE('[ADOPTION_PAY_ENTITLEMENT_RESULT] - Absence Payment    OUTPUT   : '|| to_char(pay_value))
+	l_log = PAY_INTERNAL_LOG_WRITE('[ADOPTION_PAY_ENTITLEMENT_RESULT] - Absence Deduction  OUTPUT   : '|| to_char(deduction))
+	l_log = PAY_INTERNAL_LOG_WRITE('[ADOPTION_PAY_ENTITLEMENT_RESULT] - Absence Net Pay    OUTPUT   : '|| to_char(net_pay))
+	l_log = PAY_INTERNAL_LOG_WRITE('[ADOPTION_PAY_ENTITLEMENT_RESULT] - l_emp_absence_payment   OUTPUT   : '|| to_char(l_emp_absence_payment))
+	l_log = PAY_INTERNAL_LOG_WRITE('[ADOPTION_PAY_ENTITLEMENT_RESULT] - l_emp_absence_deduction OUTPUT   : '|| to_char(l_emp_absence_deduction))
+	l_log = PAY_INTERNAL_LOG_WRITE('[ADOPTION_PAY_ENTITLEMENT_RESULT] - l_Contractual_Non_Premium    OUTPUT   : '|| to_char(l_Contractual_Non_Premium))
+	l_log = PAY_INTERNAL_LOG_WRITE('[ADOPTION_PAY_ENTITLEMENT_RESULT] - l_additional_notional_pens_bal     OUTPUT   : '|| to_char(l_additional_notional_pens_bal))
+	l_log = PAY_INTERNAL_LOG_WRITE('[ADOPTION_PAY_ENTITLEMENT_RESULT] - l_additional_notional_pens_comment OUTPUT   : '|| l_additional_notional_pens_comment)
+
+  l_log = PAY_INTERNAL_LOG_WRITE('[ADOPTION_PAY_ENTITLEMENT_RESULT] - l_salary_deduction    OUTPUT   : '|| to_char(l_salary_deduction))
+  l_log = PAY_INTERNAL_LOG_WRITE('[ADOPTION_PAY_ENTITLEMENT_RESULT] - l_location_deduction    OUTPUT   : '|| to_char(l_location_deduction))
+  l_log = PAY_INTERNAL_LOG_WRITE('[ADOPTION_PAY_ENTITLEMENT_RESULT] - l_mrkt_supp_deduction    OUTPUT   : '|| to_char(l_mrkt_supp_deduction))
+  l_log = PAY_INTERNAL_LOG_WRITE('[ADOPTION_PAY_ENTITLEMENT_RESULT] - l_mrkt_supp_mgmt_deduction    OUTPUT   : '|| to_char(l_mrkt_supp_mgmt_deduction))
+  l_log = PAY_INTERNAL_LOG_WRITE('[ADOPTION_PAY_ENTITLEMENT_RESULT] - l_dep_supp_deduction    OUTPUT   : '|| to_char(l_dep_supp_deduction))
+  l_log = PAY_INTERNAL_LOG_WRITE('[ADOPTION_PAY_ENTITLEMENT_RESULT] - l_first_aid_deduction    OUTPUT   : '|| to_char(l_first_aid_deduction))
+  l_log = PAY_INTERNAL_LOG_WRITE('[ADOPTION_PAY_ENTITLEMENT_RESULT] - l_night_supp_deduction    OUTPUT   : '|| to_char(l_night_supp_deduction))
+  l_log = PAY_INTERNAL_LOG_WRITE('[ADOPTION_PAY_ENTITLEMENT_RESULT] - l_dist_supp_deduction    OUTPUT   : '|| to_char(l_dist_supp_deduction))
+  l_log = PAY_INTERNAL_LOG_WRITE('[ADOPTION_PAY_ENTITLEMENT_RESULT] - l_bank_hol_supp_deduction    OUTPUT   : '|| to_char(l_bank_hol_supp_deduction))
+  l_log = PAY_INTERNAL_LOG_WRITE('[ADOPTION_PAY_ENTITLEMENT_RESULT] - l_protected_ele_deduction    OUTPUT   : '|| to_char(l_protected_ele_deduction))
+  l_log = PAY_INTERNAL_LOG_WRITE('[ADOPTION_PAY_ENTITLEMENT_RESULT] - l_personal_rate_deduction    OUTPUT   : '|| to_char(l_personal_rate_deduction))
+  l_log = PAY_INTERNAL_LOG_WRITE('[ADOPTION_PAY_ENTITLEMENT_RESULT] - l_night_premium_deduction    OUTPUT   : '|| to_char(l_night_premium_deduction))
+  l_log = PAY_INTERNAL_LOG_WRITE('[ADOPTION_PAY_ENTITLEMENT_RESULT] - l_sun_premium_deduction    OUTPUT   : '|| to_char(l_sun_premium_deduction))
+  l_log = PAY_INTERNAL_LOG_WRITE('[ADOPTION_PAY_ENTITLEMENT_RESULT] - l_extra_night_premium_deduction    OUTPUT   : '|| to_char(l_extra_night_premium_deduction))
+  l_log = PAY_INTERNAL_LOG_WRITE('[ADOPTION_PAY_ENTITLEMENT_RESULT] - l_bank_hol_premium_deduction    OUTPUT   : '|| to_char(l_bank_hol_premium_deduction))
+  l_log = PAY_INTERNAL_LOG_WRITE('[ADOPTION_PAY_ENTITLEMENT_RESULT] - l_sun_supp_deduction    OUTPUT   : '|| to_char(l_sun_supp_deduction))
+
+  periodicity = 'PRD'
+
+  l_current_week = WSA_GET('week', 0) 
+
+	l_log = PAY_INTERNAL_LOG_WRITE('[ADOPTION_PAY_ENTITLEMENT_RESULT] - Week           OUTPUT   : '|| to_char(Week))
+	l_log = PAY_INTERNAL_LOG_WRITE('[ADOPTION_PAY_ENTITLEMENT_RESULT] - l_current_week OUTPUT   : '|| to_char(l_current_week))
+
+    IF l_current_week >= week THEN
+    (
+        
+        IF week = 1 THEN
+        (
+            week_1   = net_pay
+            p_week_1 = pay_value        
+            hours_worked_1 = l_hours_worked 
+            if l_salary_deduction <> 0
+            then
+            (
+              r_salary_deduction=l_salary_deduction
+              r_salary_deduction_week_1=l_salary_deduction
+              r_salary_deduction_week_1_hrs=l_salary_ded_units
+              r_salary_unit_offset = l_salary_ded_units
+              r_salary_periodicity=periodicity
+              r_salary_dir_card_id=dir_card_id
+              r_salary_dir_comp_id=dir_comp_id
+
+            )  
+            if l_location_deduction <> 0
+            then
+            (
+              r_location_deduction=l_location_deduction
+              r_location_deduction_week_1=l_location_deduction
+              r_location_deduction_week_1_hrs=l_location_ded_units
+              r_location_unit_offset = l_location_ded_units
+              r_location_periodicity=periodicity
+              r_location_dir_card_id=dir_card_id
+              r_location_dir_comp_id=dir_comp_id
+            )  
+
+            if l_mrkt_supp_deduction <> 0
+            then
+            (
+              r_mrkt_supp_deduction=l_mrkt_supp_deduction
+              r_mrkt_supp_deduction_week_1=l_mrkt_supp_deduction
+              r_mrkt_supp_deduction_week_1_hrs=l_mrkt_supp_ded_units
+              r_mrkt_supp_unit_offset = l_mrkt_supp_ded_units
+              r_mrkt_supp_periodicity=periodicity
+              r_mrkt_supp_dir_card_id=dir_card_id
+              r_mrkt_supp_dir_comp_id=dir_comp_id
+            )  
+
+            if l_mrkt_supp_mgmt_deduction <> 0
+            then
+            (
+              r_mrkt_supp_mgmt_deduction=l_mrkt_supp_mgmt_deduction
+              r_mrkt_supp_mgmt_deduction_week_1=l_mrkt_supp_mgmt_deduction
+              r_mrkt_supp_mgmt_deduction_week_1_hrs=l_mrkt_supp_mgmt_ded_units
+              r_mrkt_supp_mgmt_unit_offset = l_mrkt_supp_mgmt_ded_units
+              r_mrkt_supp_mgmt_periodicity=periodicity
+              r_mrkt_supp_mgmt_dir_card_id=dir_card_id
+              r_mrkt_supp_mgmt_dir_comp_id=dir_comp_id
+            )  
+
+            if l_dep_supp_deduction <> 0
+            then
+            (
+              r_dep_supp_deduction=l_dep_supp_deduction
+              r_dep_supp_deduction_week_1=l_dep_supp_deduction
+              r_dep_supp_deduction_week_1_hrs=l_dep_supp_ded_units
+              r_dep_supp_unit_offset = l_dep_supp_ded_units
+              r_dep_supp_periodicity=periodicity
+              r_dep_supp_dir_card_id=dir_card_id
+              r_dep_supp_dir_comp_id=dir_comp_id
+            )  
+
+            if l_first_aid_deduction <> 0
+            then
+            (
+              r_first_aid_deduction=l_first_aid_deduction
+              r_first_aid_deduction_week_1=l_first_aid_deduction
+              r_first_aid_deduction_week_1_hrs=l_first_aid_ded_units
+              r_first_aid_unit_offset = l_first_aid_ded_units
+              r_first_aid_periodicity=periodicity
+              r_first_aid_dir_card_id=dir_card_id
+              r_first_aid_dir_comp_id=dir_comp_id
+            )  
+
+            if l_night_supp_deduction <> 0
+            then
+            (
+              r_night_supp_deduction=l_night_supp_deduction
+              r_night_supp_deduction_week_1=l_night_supp_deduction
+              r_night_supp_deduction_week_1_hrs=l_night_supp_ded_units
+              r_night_supp_unit_offset = l_night_supp_ded_units
+              r_night_supp_periodicity=periodicity
+              r_night_supp_dir_card_id=dir_card_id
+              r_night_supp_dir_comp_id=dir_comp_id
+            )  
+
+            if l_dist_supp_deduction <> 0
+            then
+            (
+              r_dist_supp_deduction=l_dist_supp_deduction
+              r_dist_supp_deduction_week_1=l_dist_supp_deduction
+              r_dist_supp_deduction_week_1_hrs=l_dist_supp_ded_units
+              r_dist_supp_unit_offset = l_dist_supp_ded_units
+              r_dist_supp_periodicity=periodicity
+              r_dist_supp_dir_card_id=dir_card_id
+              r_dist_supp_dir_comp_id=dir_comp_id
+            )  
+
+            if l_bank_hol_supp_deduction <> 0
+            then
+            (
+              r_bank_hol_supp_deduction=l_bank_hol_supp_deduction
+              r_bank_hol_supp_deduction_week_1=l_bank_hol_supp_deduction
+              r_bank_hol_supp_deduction_week_1_hrs=l_bank_hol_supp_ded_units
+              r_bank_hol_supp_unit_offset = l_bank_hol_supp_ded_units
+              r_bank_hol_supp_periodicity=periodicity
+              r_bank_hol_supp_dir_card_id=dir_card_id
+              r_bank_hol_supp_dir_comp_id=dir_comp_id
+            )  
+        
+            if l_protected_ele_deduction <> 0
+            then
+            (
+              r_protected_ele_deduction=l_protected_ele_deduction
+              r_protected_ele_deduction_week_1=l_protected_ele_deduction
+              r_protected_ele_deduction_week_1_hrs=l_protected_ele_ded_units
+              r_protected_ele_unit_offset = l_protected_ele_ded_units
+              r_protected_ele_periodicity=periodicity
+              r_protected_ele_dir_card_id=dir_card_id
+              r_protected_ele_dir_comp_id=dir_comp_id
+            )  
+
+            if l_personal_rate_deduction <> 0
+            then
+            (
+              r_personal_rate_deduction=l_personal_rate_deduction
+              r_personal_rate_deduction_week_1=l_personal_rate_deduction
+              r_personal_rate_deduction_week_1_hrs=l_personal_rate_ded_units
+              r_personal_rate_unit_offset = l_personal_rate_ded_units
+              r_personal_rate_periodicity=periodicity
+              r_personal_rate_dir_card_id=dir_card_id
+              r_personal_rate_dir_comp_id=dir_comp_id
+            )  
+
+            if l_night_premium_deduction <> 0
+            then
+            (
+              r_night_premium_deduction=l_night_premium_deduction
+              r_night_premium_deduction_week_1=l_night_premium_deduction
+              r_night_premium_deduction_week_1_hrs=l_night_premium_ded_units
+              r_night_premium_unit_offset = l_night_premium_ded_units
+              r_night_premium_periodicity=periodicity
+              r_night_premium_dir_card_id=dir_card_id
+              r_night_premium_dir_comp_id=dir_comp_id
+            )  
+
+            if l_sun_premium_deduction <> 0
+            then
+            (
+              r_sun_premium_deduction=l_sun_premium_deduction
+              r_sun_premium_deduction_week_1=l_sun_premium_deduction
+              r_sun_premium_deduction_week_1_hrs=l_sun_premium_ded_units
+              r_sun_premium_unit_offset = l_sun_premium_ded_units
+              r_sun_premium_periodicity=periodicity
+              r_sun_premium_dir_card_id=dir_card_id
+              r_sun_premium_dir_comp_id=dir_comp_id
+            )  
+
+            if l_extra_night_premium_deduction <> 0
+            then
+            (
+              r_extra_night_premium_deduction=l_extra_night_premium_deduction
+              r_extra_night_premium_deduction_week_1=l_extra_night_premium_deduction
+              r_extra_night_premium_deduction_week_1_hrs=l_extra_night_premium_ded_units
+              r_extra_night_premium_unit_offset = l_extra_night_premium_ded_units
+              r_extra_night_periodicity=periodicity
+              r_extra_night_dir_card_id=dir_card_id
+              r_extra_night_dir_comp_id=dir_comp_id
+            )  
+
+            if l_bank_hol_premium_deduction <> 0
+            then
+            (
+              r_bank_hol_premium_deduction=l_bank_hol_premium_deduction
+              r_bank_hol_premium_deduction_week_1=l_bank_hol_premium_deduction
+              r_bank_hol_premium_deduction_week_1_hrs=l_bank_hol_premium_ded_units
+              r_bank_hol_premium_unit_offset = l_bank_hol_premium_ded_units
+              r_bank_hol_premium_periodicity=periodicity
+              r_bank_hol_premium_dir_card_id=dir_card_id
+              r_bank_hol_premium_dir_comp_id=dir_comp_id
+            )  
+            if l_sun_supp_deduction <> 0
+            then
+            (
+              r_sun_supp_deduction=l_sun_supp_deduction
+              r_sun_supp_deduction_week_1=l_sun_supp_deduction
+              r_sun_supp_deduction_week_1_hrs=l_sun_supp_ded_units
+              r_sun_supp_unit_offset = l_sun_supp_ded_units
+              r_sun_supp_periodicity=periodicity
+              r_sun_supp_dir_card_id=dir_card_id
+              r_sun_supp_dir_comp_id=dir_comp_id
+            )  
+            
+        )
+        ELSE IF week = 2 THEN
+        (
+            week_2   = net_pay
+            p_week_2 = pay_value        
+            hours_worked_2 = l_hours_worked
+            if l_salary_deduction <> 0
+            then
+            (
+              r_salary_deduction=l_salary_deduction
+              r_salary_deduction_week_2=l_salary_deduction
+              r_salary_deduction_week_2_hrs=l_salary_ded_units
+              r_salary_unit_offset = l_salary_ded_units
+              r_salary_periodicity=periodicity
+              r_salary_dir_card_id=dir_card_id
+              r_salary_dir_comp_id=dir_comp_id
+
+            )  
+            if l_location_deduction <> 0
+            then
+            (
+              r_location_deduction=l_location_deduction
+              r_location_deduction_week_2=l_location_deduction
+              r_location_deduction_week_2_hrs=l_location_ded_units
+              r_location_unit_offset = l_location_ded_units
+              r_location_periodicity=periodicity
+              r_location_dir_card_id=dir_card_id
+              r_location_dir_comp_id=dir_comp_id
+            )  
+
+            if l_mrkt_supp_deduction <> 0
+            then
+            (
+              r_mrkt_supp_deduction=l_mrkt_supp_deduction
+              r_mrkt_supp_deduction_week_2=l_mrkt_supp_deduction
+              r_mrkt_supp_deduction_week_2_hrs=l_mrkt_supp_ded_units
+              r_mrkt_supp_unit_offset = l_mrkt_supp_ded_units
+              r_mrkt_supp_periodicity=periodicity
+              r_mrkt_supp_dir_card_id=dir_card_id
+              r_mrkt_supp_dir_comp_id=dir_comp_id
+            )  
+
+            if l_mrkt_supp_mgmt_deduction <> 0
+            then
+            (
+              r_mrkt_supp_mgmt_deduction=l_mrkt_supp_mgmt_deduction
+              r_mrkt_supp_mgmt_deduction_week_2=l_mrkt_supp_mgmt_deduction
+              r_mrkt_supp_mgmt_deduction_week_2_hrs=l_mrkt_supp_mgmt_ded_units
+              r_mrkt_supp_mgmt_unit_offset = l_mrkt_supp_mgmt_ded_units
+              r_mrkt_supp_mgmt_periodicity=periodicity
+              r_mrkt_supp_mgmt_dir_card_id=dir_card_id
+              r_mrkt_supp_mgmt_dir_comp_id=dir_comp_id
+            )  
+
+            if l_dep_supp_deduction <> 0
+            then
+            (
+              r_dep_supp_deduction=l_dep_supp_deduction
+              r_dep_supp_deduction_week_2=l_dep_supp_deduction
+              r_dep_supp_deduction_week_2_hrs=l_dep_supp_ded_units
+              r_dep_supp_unit_offset = l_dep_supp_ded_units
+              r_dep_supp_periodicity=periodicity
+              r_dep_supp_dir_card_id=dir_card_id
+              r_dep_supp_dir_comp_id=dir_comp_id
+            )  
+
+            if l_first_aid_deduction <> 0
+            then
+            (
+              r_first_aid_deduction=l_first_aid_deduction
+              r_first_aid_deduction_week_2=l_first_aid_deduction
+              r_first_aid_deduction_week_2_hrs=l_first_aid_ded_units
+              r_first_aid_unit_offset = l_first_aid_ded_units
+              r_first_aid_periodicity=periodicity
+              r_first_aid_dir_card_id=dir_card_id
+              r_first_aid_dir_comp_id=dir_comp_id
+            )  
+
+            if l_night_supp_deduction <> 0
+            then
+            (
+              r_night_supp_deduction=l_night_supp_deduction
+              r_night_supp_deduction_week_2=l_night_supp_deduction
+              r_night_supp_deduction_week_2_hrs=l_night_supp_ded_units
+              r_night_supp_unit_offset = l_night_supp_ded_units
+              r_night_supp_periodicity=periodicity
+              r_night_supp_dir_card_id=dir_card_id
+              r_night_supp_dir_comp_id=dir_comp_id
+            )  
+
+            if l_dist_supp_deduction <> 0
+            then
+            (
+              r_dist_supp_deduction=l_dist_supp_deduction
+              r_dist_supp_deduction_week_2=l_dist_supp_deduction
+              r_dist_supp_deduction_week_2_hrs=l_dist_supp_ded_units
+              r_dist_supp_unit_offset = l_dist_supp_ded_units
+              r_dist_supp_periodicity=periodicity
+              r_dist_supp_dir_card_id=dir_card_id
+              r_dist_supp_dir_comp_id=dir_comp_id
+            )  
+
+            if l_bank_hol_supp_deduction <> 0
+            then
+            (
+              r_bank_hol_supp_deduction=l_bank_hol_supp_deduction
+              r_bank_hol_supp_deduction_week_2=l_bank_hol_supp_deduction
+              r_bank_hol_supp_deduction_week_2_hrs=l_bank_hol_supp_ded_units
+              r_bank_hol_supp_unit_offset = l_bank_hol_supp_ded_units
+              r_bank_hol_supp_periodicity=periodicity
+              r_bank_hol_supp_dir_card_id=dir_card_id
+              r_bank_hol_supp_dir_comp_id=dir_comp_id
+            )  
+        
+            if l_protected_ele_deduction <> 0
+            then
+            (
+              r_protected_ele_deduction=l_protected_ele_deduction
+              r_protected_ele_deduction_week_2=l_protected_ele_deduction
+              r_protected_ele_deduction_week_2_hrs=l_protected_ele_ded_units
+              r_protected_ele_unit_offset = l_protected_ele_ded_units
+              r_protected_ele_periodicity=periodicity
+              r_protected_ele_dir_card_id=dir_card_id
+              r_protected_ele_dir_comp_id=dir_comp_id
+            )  
+
+            if l_personal_rate_deduction <> 0
+            then
+            (
+              r_personal_rate_deduction=l_personal_rate_deduction
+              r_personal_rate_deduction_week_2=l_personal_rate_deduction
+              r_personal_rate_deduction_week_2_hrs=l_personal_rate_ded_units
+              r_personal_rate_unit_offset = l_personal_rate_ded_units
+              r_personal_rate_periodicity=periodicity
+              r_personal_rate_dir_card_id=dir_card_id
+              r_personal_rate_dir_comp_id=dir_comp_id
+            )  
+
+            if l_night_premium_deduction <> 0
+            then
+            (
+              r_night_premium_deduction=l_night_premium_deduction
+              r_night_premium_deduction_week_2=l_night_premium_deduction
+              r_night_premium_deduction_week_2_hrs=l_night_premium_ded_units
+              r_night_premium_unit_offset = l_night_premium_ded_units
+              r_night_premium_periodicity=periodicity
+              r_night_premium_dir_card_id=dir_card_id
+              r_night_premium_dir_comp_id=dir_comp_id
+            )  
+
+            if l_sun_premium_deduction <> 0
+            then
+            (
+              r_sun_premium_deduction=l_sun_premium_deduction
+              r_sun_premium_deduction_week_2=l_sun_premium_deduction
+              r_sun_premium_deduction_week_2_hrs=l_sun_premium_ded_units
+              r_sun_premium_unit_offset = l_sun_premium_ded_units
+              r_sun_premium_periodicity=periodicity
+              r_sun_premium_dir_card_id=dir_card_id
+              r_sun_premium_dir_comp_id=dir_comp_id
+            )  
+
+            if l_extra_night_premium_deduction <> 0
+            then
+            (
+              r_extra_night_premium_deduction=l_extra_night_premium_deduction
+              r_extra_night_premium_deduction_week_2=l_extra_night_premium_deduction
+              r_extra_night_premium_deduction_week_2_hrs=l_extra_night_premium_ded_units
+              r_extra_night_premium_unit_offset = l_extra_night_premium_ded_units
+              r_extra_night_periodicity=periodicity
+              r_extra_night_dir_card_id=dir_card_id
+              r_extra_night_dir_comp_id=dir_comp_id
+            )  
+
+            if l_bank_hol_premium_deduction <> 0
+            then
+            (
+              r_bank_hol_premium_deduction=l_bank_hol_premium_deduction
+              r_bank_hol_premium_deduction_week_2=l_bank_hol_premium_deduction
+              r_bank_hol_premium_deduction_week_2_hrs=l_bank_hol_premium_ded_units
+              r_bank_hol_premium_unit_offset = l_bank_hol_premium_ded_units
+              r_bank_hol_premium_periodicity=periodicity
+              r_bank_hol_premium_dir_card_id=dir_card_id
+              r_bank_hol_premium_dir_comp_id=dir_comp_id
+            )  
+            if l_sun_supp_deduction <> 0
+            then
+            (
+              r_sun_supp_deduction=l_sun_supp_deduction
+              r_sun_supp_deduction_week_2=l_sun_supp_deduction
+              r_sun_supp_deduction_week_2_hrs=l_sun_supp_ded_units
+              r_sun_supp_unit_offset = l_sun_supp_ded_units
+              r_sun_supp_periodicity=periodicity
+              r_sun_supp_dir_card_id=dir_card_id
+              r_sun_supp_dir_comp_id=dir_comp_id
+            )  
+            
+        )
+        ELSE IF week = 3 THEN
+        (
+            week_3   = net_pay
+            p_week_3 = pay_value        
+            hours_worked_3 = l_hours_worked 
+            if l_salary_deduction <> 0
+            then
+            (
+              r_salary_deduction=l_salary_deduction
+              r_salary_deduction_week_3=l_salary_deduction
+              r_salary_deduction_week_3_hrs=l_salary_ded_units
+              r_salary_unit_offset = l_salary_ded_units
+              r_salary_periodicity=periodicity
+              r_salary_dir_card_id=dir_card_id
+              r_salary_dir_comp_id=dir_comp_id
+
+            )  
+            if l_location_deduction <> 0
+            then
+            (
+              r_location_deduction=l_location_deduction
+              r_location_deduction_week_3=l_location_deduction
+              r_location_deduction_week_3_hrs=l_location_ded_units
+              r_location_unit_offset = l_location_ded_units
+              r_location_periodicity=periodicity
+              r_location_dir_card_id=dir_card_id
+              r_location_dir_comp_id=dir_comp_id
+            )  
+
+            if l_mrkt_supp_deduction <> 0
+            then
+            (
+              r_mrkt_supp_deduction=l_mrkt_supp_deduction
+              r_mrkt_supp_deduction_week_3=l_mrkt_supp_deduction
+              r_mrkt_supp_deduction_week_3_hrs=l_mrkt_supp_ded_units
+              r_mrkt_supp_unit_offset = l_mrkt_supp_ded_units
+              r_mrkt_supp_periodicity=periodicity
+              r_mrkt_supp_dir_card_id=dir_card_id
+              r_mrkt_supp_dir_comp_id=dir_comp_id
+            )  
+
+            if l_mrkt_supp_mgmt_deduction <> 0
+            then
+            (
+              r_mrkt_supp_mgmt_deduction=l_mrkt_supp_mgmt_deduction
+              r_mrkt_supp_mgmt_deduction_week_3=l_mrkt_supp_mgmt_deduction
+              r_mrkt_supp_mgmt_deduction_week_3_hrs=l_mrkt_supp_mgmt_ded_units
+              r_mrkt_supp_mgmt_unit_offset = l_mrkt_supp_mgmt_ded_units
+              r_mrkt_supp_mgmt_periodicity=periodicity
+              r_mrkt_supp_mgmt_dir_card_id=dir_card_id
+              r_mrkt_supp_mgmt_dir_comp_id=dir_comp_id
+            )  
+
+            if l_dep_supp_deduction <> 0
+            then
+            (
+              r_dep_supp_deduction=l_dep_supp_deduction
+              r_dep_supp_deduction_week_3=l_dep_supp_deduction
+              r_dep_supp_deduction_week_3_hrs=l_dep_supp_ded_units
+              r_dep_supp_unit_offset = l_dep_supp_ded_units
+              r_dep_supp_periodicity=periodicity
+              r_dep_supp_dir_card_id=dir_card_id
+              r_dep_supp_dir_comp_id=dir_comp_id
+            )  
+
+            if l_first_aid_deduction <> 0
+            then
+            (
+              r_first_aid_deduction=l_first_aid_deduction
+              r_first_aid_deduction_week_3=l_first_aid_deduction
+              r_first_aid_deduction_week_3_hrs=l_first_aid_ded_units
+              r_first_aid_unit_offset = l_first_aid_ded_units
+              r_first_aid_periodicity=periodicity
+              r_first_aid_dir_card_id=dir_card_id
+              r_first_aid_dir_comp_id=dir_comp_id
+            )  
+
+            if l_night_supp_deduction <> 0
+            then
+            (
+              r_night_supp_deduction=l_night_supp_deduction
+              r_night_supp_deduction_week_3=l_night_supp_deduction
+              r_night_supp_deduction_week_3_hrs=l_night_supp_ded_units
+              r_night_supp_unit_offset = l_night_supp_ded_units
+              r_night_supp_periodicity=periodicity
+              r_night_supp_dir_card_id=dir_card_id
+              r_night_supp_dir_comp_id=dir_comp_id
+            )  
+
+            if l_dist_supp_deduction <> 0
+            then
+            (
+              r_dist_supp_deduction=l_dist_supp_deduction
+              r_dist_supp_deduction_week_3=l_dist_supp_deduction
+              r_dist_supp_deduction_week_3_hrs=l_dist_supp_ded_units
+              r_dist_supp_unit_offset = l_dist_supp_ded_units
+              r_dist_supp_periodicity=periodicity
+              r_dist_supp_dir_card_id=dir_card_id
+              r_dist_supp_dir_comp_id=dir_comp_id
+            )  
+
+            if l_bank_hol_supp_deduction <> 0
+            then
+            (
+              r_bank_hol_supp_deduction=l_bank_hol_supp_deduction
+              r_bank_hol_supp_deduction_week_3=l_bank_hol_supp_deduction
+              r_bank_hol_supp_deduction_week_3_hrs=l_bank_hol_supp_ded_units
+              r_bank_hol_supp_unit_offset = l_bank_hol_supp_ded_units
+              r_bank_hol_supp_periodicity=periodicity
+              r_bank_hol_supp_dir_card_id=dir_card_id
+              r_bank_hol_supp_dir_comp_id=dir_comp_id
+            )  
+        
+            if l_protected_ele_deduction <> 0
+            then
+            (
+              r_protected_ele_deduction=l_protected_ele_deduction
+              r_protected_ele_deduction_week_3=l_protected_ele_deduction
+              r_protected_ele_deduction_week_3_hrs=l_protected_ele_ded_units
+              r_protected_ele_unit_offset = l_protected_ele_ded_units
+              r_protected_ele_periodicity=periodicity
+              r_protected_ele_dir_card_id=dir_card_id
+              r_protected_ele_dir_comp_id=dir_comp_id
+            )  
+
+            if l_personal_rate_deduction <> 0
+            then
+            (
+              r_personal_rate_deduction=l_personal_rate_deduction
+              r_personal_rate_deduction_week_3=l_personal_rate_deduction
+              r_personal_rate_deduction_week_3_hrs=l_personal_rate_ded_units
+              r_personal_rate_unit_offset = l_personal_rate_ded_units
+              r_personal_rate_periodicity=periodicity
+              r_personal_rate_dir_card_id=dir_card_id
+              r_personal_rate_dir_comp_id=dir_comp_id
+            )  
+
+            if l_night_premium_deduction <> 0
+            then
+            (
+              r_night_premium_deduction=l_night_premium_deduction
+              r_night_premium_deduction_week_3=l_night_premium_deduction
+              r_night_premium_deduction_week_3_hrs=l_night_premium_ded_units
+              r_night_premium_unit_offset = l_night_premium_ded_units
+              r_night_premium_periodicity=periodicity
+              r_night_premium_dir_card_id=dir_card_id
+              r_night_premium_dir_comp_id=dir_comp_id
+            )  
+
+            if l_sun_premium_deduction <> 0
+            then
+            (
+              r_sun_premium_deduction=l_sun_premium_deduction
+              r_sun_premium_deduction_week_3=l_sun_premium_deduction
+              r_sun_premium_deduction_week_3_hrs=l_sun_premium_ded_units
+              r_sun_premium_unit_offset = l_sun_premium_ded_units
+              r_sun_premium_periodicity=periodicity
+              r_sun_premium_dir_card_id=dir_card_id
+              r_sun_premium_dir_comp_id=dir_comp_id
+            )  
+
+            if l_extra_night_premium_deduction <> 0
+            then
+            (
+              r_extra_night_premium_deduction=l_extra_night_premium_deduction
+              r_extra_night_premium_deduction_week_3=l_extra_night_premium_deduction
+              r_extra_night_premium_deduction_week_3_hrs=l_extra_night_premium_ded_units
+              r_extra_night_premium_unit_offset = l_extra_night_premium_ded_units
+              r_extra_night_periodicity=periodicity
+              r_extra_night_dir_card_id=dir_card_id
+              r_extra_night_dir_comp_id=dir_comp_id
+            )  
+
+            if l_bank_hol_premium_deduction <> 0
+            then
+            (
+              r_bank_hol_premium_deduction=l_bank_hol_premium_deduction
+              r_bank_hol_premium_deduction_week_3=l_bank_hol_premium_deduction
+              r_bank_hol_premium_deduction_week_3_hrs=l_bank_hol_premium_ded_units
+              r_bank_hol_premium_unit_offset = l_bank_hol_premium_ded_units
+              r_bank_hol_premium_periodicity=periodicity
+              r_bank_hol_premium_dir_card_id=dir_card_id
+              r_bank_hol_premium_dir_comp_id=dir_comp_id
+            )  
+            if l_sun_supp_deduction <> 0
+            then
+            (
+              r_sun_supp_deduction=l_sun_supp_deduction
+              r_sun_supp_deduction_week_3=l_sun_supp_deduction
+              r_sun_supp_deduction_week_3_hrs=l_sun_supp_ded_units
+              r_sun_supp_unit_offset = l_sun_supp_ded_units
+              r_sun_supp_periodicity=periodicity
+              r_sun_supp_dir_card_id=dir_card_id
+              r_sun_supp_dir_comp_id=dir_comp_id
+            )  
+            
+        )
+        ELSE
+        (
+            week_4   = net_pay
+            p_week_4 = pay_value        
+            hours_worked_4 = l_hours_worked 
+            if l_salary_deduction <> 0
+            then
+            (
+              r_salary_deduction=l_salary_deduction
+              r_salary_deduction_week_4=l_salary_deduction
+              r_salary_deduction_week_4_hrs=l_salary_ded_units
+              r_salary_unit_offset = l_salary_ded_units
+              r_salary_periodicity=periodicity
+              r_salary_dir_card_id=dir_card_id
+              r_salary_dir_comp_id=dir_comp_id
+
+            )  
+            if l_location_deduction <> 0
+            then
+            (
+              r_location_deduction=l_location_deduction
+              r_location_deduction_week_4=l_location_deduction
+              r_location_deduction_week_4_hrs=l_location_ded_units
+              r_location_unit_offset = l_location_ded_units
+              r_location_periodicity=periodicity
+              r_location_dir_card_id=dir_card_id
+              r_location_dir_comp_id=dir_comp_id
+            )  
+
+            if l_mrkt_supp_deduction <> 0
+            then
+            (
+              r_mrkt_supp_deduction=l_mrkt_supp_deduction
+              r_mrkt_supp_deduction_week_4=l_mrkt_supp_deduction
+              r_mrkt_supp_deduction_week_4_hrs=l_mrkt_supp_ded_units
+              r_mrkt_supp_unit_offset = l_mrkt_supp_ded_units
+              r_mrkt_supp_periodicity=periodicity
+              r_mrkt_supp_dir_card_id=dir_card_id
+              r_mrkt_supp_dir_comp_id=dir_comp_id
+            )  
+
+            if l_mrkt_supp_mgmt_deduction <> 0
+            then
+            (
+              r_mrkt_supp_mgmt_deduction=l_mrkt_supp_mgmt_deduction
+              r_mrkt_supp_mgmt_deduction_week_4=l_mrkt_supp_mgmt_deduction
+              r_mrkt_supp_mgmt_deduction_week_4_hrs=l_mrkt_supp_mgmt_ded_units
+              r_mrkt_supp_mgmt_unit_offset = l_mrkt_supp_mgmt_ded_units
+              r_mrkt_supp_mgmt_periodicity=periodicity
+              r_mrkt_supp_mgmt_dir_card_id=dir_card_id
+              r_mrkt_supp_mgmt_dir_comp_id=dir_comp_id
+            )  
+
+            if l_dep_supp_deduction <> 0
+            then
+            (
+              r_dep_supp_deduction=l_dep_supp_deduction
+              r_dep_supp_deduction_week_4=l_dep_supp_deduction
+              r_dep_supp_deduction_week_4_hrs=l_dep_supp_ded_units
+              r_dep_supp_unit_offset = l_dep_supp_ded_units
+              r_dep_supp_periodicity=periodicity
+              r_dep_supp_dir_card_id=dir_card_id
+              r_dep_supp_dir_comp_id=dir_comp_id
+            )  
+
+            if l_first_aid_deduction <> 0
+            then
+            (
+              r_first_aid_deduction=l_first_aid_deduction
+              r_first_aid_deduction_week_4=l_first_aid_deduction
+              r_first_aid_deduction_week_4_hrs=l_first_aid_ded_units
+              r_first_aid_unit_offset = l_first_aid_ded_units
+              r_first_aid_periodicity=periodicity
+              r_first_aid_dir_card_id=dir_card_id
+              r_first_aid_dir_comp_id=dir_comp_id
+            )  
+
+            if l_night_supp_deduction <> 0
+            then
+            (
+              r_night_supp_deduction=l_night_supp_deduction
+              r_night_supp_deduction_week_4=l_night_supp_deduction
+              r_night_supp_deduction_week_4_hrs=l_night_supp_ded_units
+              r_night_supp_unit_offset = l_night_supp_ded_units
+              r_night_supp_periodicity=periodicity
+              r_night_supp_dir_card_id=dir_card_id
+              r_night_supp_dir_comp_id=dir_comp_id
+            )  
+
+            if l_dist_supp_deduction <> 0
+            then
+            (
+              r_dist_supp_deduction=l_dist_supp_deduction
+              r_dist_supp_deduction_week_4=l_dist_supp_deduction
+              r_dist_supp_deduction_week_4_hrs=l_dist_supp_ded_units
+              r_dist_supp_unit_offset = l_dist_supp_ded_units
+              r_dist_supp_periodicity=periodicity
+              r_dist_supp_dir_card_id=dir_card_id
+              r_dist_supp_dir_comp_id=dir_comp_id
+            )  
+
+            if l_bank_hol_supp_deduction <> 0
+            then
+            (
+              r_bank_hol_supp_deduction=l_bank_hol_supp_deduction
+              r_bank_hol_supp_deduction_week_4=l_bank_hol_supp_deduction
+              r_bank_hol_supp_deduction_week_4_hrs=l_bank_hol_supp_ded_units
+              r_bank_hol_supp_unit_offset = l_bank_hol_supp_ded_units
+              r_bank_hol_supp_periodicity=periodicity
+              r_bank_hol_supp_dir_card_id=dir_card_id
+              r_bank_hol_supp_dir_comp_id=dir_comp_id
+            )  
+        
+            if l_protected_ele_deduction <> 0
+            then
+            (
+              r_protected_ele_deduction=l_protected_ele_deduction
+              r_protected_ele_deduction_week_4=l_protected_ele_deduction
+              r_protected_ele_deduction_week_4_hrs=l_protected_ele_ded_units
+              r_protected_ele_unit_offset = l_protected_ele_ded_units
+              r_protected_ele_periodicity=periodicity
+              r_protected_ele_dir_card_id=dir_card_id
+              r_protected_ele_dir_comp_id=dir_comp_id
+            )  
+
+            if l_personal_rate_deduction <> 0
+            then
+            (
+              r_personal_rate_deduction=l_personal_rate_deduction
+              r_personal_rate_deduction_week_4=l_personal_rate_deduction
+              r_personal_rate_deduction_week_4_hrs=l_personal_rate_ded_units
+              r_personal_rate_unit_offset = l_personal_rate_ded_units
+              r_personal_rate_periodicity=periodicity
+              r_personal_rate_dir_card_id=dir_card_id
+              r_personal_rate_dir_comp_id=dir_comp_id
+            )  
+
+            if l_night_premium_deduction <> 0
+            then
+            (
+              r_night_premium_deduction=l_night_premium_deduction
+              r_night_premium_deduction_week_4=l_night_premium_deduction
+              r_night_premium_deduction_week_4_hrs=l_night_premium_ded_units
+              r_night_premium_unit_offset = l_night_premium_ded_units
+              r_night_premium_periodicity=periodicity
+              r_night_premium_dir_card_id=dir_card_id
+              r_night_premium_dir_comp_id=dir_comp_id
+            )  
+
+            if l_sun_premium_deduction <> 0
+            then
+            (
+              r_sun_premium_deduction=l_sun_premium_deduction
+              r_sun_premium_deduction_week_4=l_sun_premium_deduction
+              r_sun_premium_deduction_week_4_hrs=l_sun_premium_ded_units
+              r_sun_premium_unit_offset = l_sun_premium_ded_units
+              r_sun_premium_periodicity=periodicity
+              r_sun_premium_dir_card_id=dir_card_id
+              r_sun_premium_dir_comp_id=dir_comp_id
+            )  
+
+            if l_extra_night_premium_deduction <> 0
+            then
+            (
+              r_extra_night_premium_deduction=l_extra_night_premium_deduction
+              r_extra_night_premium_deduction_week_4=l_extra_night_premium_deduction
+              r_extra_night_premium_deduction_week_4_hrs=l_extra_night_premium_ded_units
+              r_extra_night_premium_unit_offset = l_extra_night_premium_ded_units
+              r_extra_night_periodicity=periodicity
+              r_extra_night_dir_card_id=dir_card_id
+              r_extra_night_dir_comp_id=dir_comp_id
+            )  
+
+            if l_bank_hol_premium_deduction <> 0
+            then
+            (
+              r_bank_hol_premium_deduction=l_bank_hol_premium_deduction
+              r_bank_hol_premium_deduction_week_4=l_bank_hol_premium_deduction
+              r_bank_hol_premium_deduction_week_4_hrs=l_bank_hol_premium_ded_units
+              r_bank_hol_premium_unit_offset = l_bank_hol_premium_ded_units
+              r_bank_hol_premium_periodicity=periodicity
+              r_bank_hol_premium_dir_card_id=dir_card_id
+              r_bank_hol_premium_dir_comp_id=dir_comp_id
+            )  
+            if l_sun_supp_deduction <> 0
+            then
+            (
+              r_sun_supp_deduction=l_sun_supp_deduction
+              r_sun_supp_deduction_week_4=l_sun_supp_deduction
+              r_sun_supp_deduction_week_4_hrs=l_sun_supp_ded_units
+              r_sun_supp_unit_offset = l_sun_supp_ded_units
+              r_sun_supp_periodicity=periodicity
+              r_sun_supp_dir_card_id=dir_card_id
+              r_sun_supp_dir_comp_id=dir_comp_id
+            )  
+        )
+        net_pay = 0   /* this is to stop the automatic classification feed to balances rather than going to the balances and removing the feed */
+
+        if l_Contractual_Non_Premium <> 0
+        then
+        (
+           r_Contractual_Non_Premium=l_Contractual_Non_Premium*-1
+        )  
+
+        l_hours_offset_worked = l_hours_worked
+
+        IF ( pay_value = 0) THEN
+        (
+            l_hours_worked = 0
+        )
+
+        IF ( deduction = 0) THEN
+        (
+            l_hours_offset_worked = 0
+        )
+
+        /* IH 1.6 l_additional_notional_pens_bal = l_additional_notional_pens_bal + l_emp_absence_payment + l_emp_absence_deduction */
+
+        /* IH ... Not required for OTL version as Basic Salary Offset takes care of this
+        IF l_colleague_type = 'NON-OTL' THEN
+        (
+            IF l_current_week = 1 THEN
+            (
+                l_absence_hours_1 = hours_worked_1
+            )
+            ELSE IF l_current_week = 2 THEN
+            (
+                l_absence_hours_2 = hours_worked_2
+            )
+            ELSE IF l_current_week = 3 THEN
+            (
+                l_absence_hours_3 = hours_worked_3
+            )
+            ELSE IF l_current_week = 4 THEN
+            (
+                l_absence_hours_4 = hours_worked_4
+            )
+        )
+        /* ... IH */
+        RETURN unit, reduce_type, pay_value, deduction, net_pay, dir_comp_id,dir_card_id, rate,ded_amount_rate, factor
+             , week_1, week_2, week_3, week_4
+             /*, d_week_1, d_week_2, d_week_3, d_week_4*/
+             , p_week_1, p_week_2, p_week_3, p_week_4
+             , periodicity, hours_worked_1, hours_worked_2, hours_worked_3, hours_worked_4
+           /* IH   , l_absence_hours_1, l_absence_hours_2, l_absence_hours_3, l_absence_hours_4 */
+             , l_hours_worked,l_hours_offset_worked, r_Contractual_Non_Premium, l_additional_notional_pens_bal
+             , l_additional_notional_pens_comment 
+              ,r_bank_hol_premium_deduction
+              ,r_bank_hol_premium_deduction_week_1
+              ,r_bank_hol_premium_deduction_week_1_hrs
+              ,r_bank_hol_premium_deduction_week_2
+              ,r_bank_hol_premium_deduction_week_2_hrs
+              ,r_bank_hol_premium_deduction_week_3
+              ,r_bank_hol_premium_deduction_week_3_hrs
+              ,r_bank_hol_premium_deduction_week_4
+              ,r_bank_hol_premium_deduction_week_4_hrs
+              ,r_bank_hol_premium_unit_offset
+              ,r_bank_hol_supp_deduction
+              ,r_bank_hol_supp_deduction_week_1
+              ,r_bank_hol_supp_deduction_week_1_hrs
+              ,r_bank_hol_supp_deduction_week_2
+              ,r_bank_hol_supp_deduction_week_2_hrs
+              ,r_bank_hol_supp_deduction_week_3
+              ,r_bank_hol_supp_deduction_week_3_hrs
+              ,r_bank_hol_supp_deduction_week_4
+              ,r_bank_hol_supp_deduction_week_4_hrs
+              ,r_bank_hol_supp_unit_offset
+              ,r_dep_supp_deduction
+              ,r_dep_supp_deduction_week_1
+              ,r_dep_supp_deduction_week_1_hrs
+              ,r_dep_supp_deduction_week_2
+              ,r_dep_supp_deduction_week_2_hrs
+              ,r_dep_supp_deduction_week_3
+              ,r_dep_supp_deduction_week_3_hrs
+              ,r_dep_supp_deduction_week_4
+              ,r_dep_supp_deduction_week_4_hrs
+              ,r_dep_supp_unit_offset
+              ,r_dist_supp_deduction
+              ,r_dist_supp_deduction_week_1
+              ,r_dist_supp_deduction_week_1_hrs
+              ,r_dist_supp_deduction_week_2
+              ,r_dist_supp_deduction_week_2_hrs
+              ,r_dist_supp_deduction_week_3
+              ,r_dist_supp_deduction_week_3_hrs
+              ,r_dist_supp_deduction_week_4
+              ,r_dist_supp_deduction_week_4_hrs
+              ,r_dist_supp_unit_offset
+              ,r_extra_night_premium_deduction
+              ,r_extra_night_premium_deduction_week_1
+              ,r_extra_night_premium_deduction_week_1_hrs
+              ,r_extra_night_premium_deduction_week_2
+              ,r_extra_night_premium_deduction_week_2_hrs
+              ,r_extra_night_premium_deduction_week_3
+              ,r_extra_night_premium_deduction_week_3_hrs
+              ,r_extra_night_premium_deduction_week_4
+              ,r_extra_night_premium_deduction_week_4_hrs
+              ,r_extra_night_premium_unit_offset
+              ,r_first_aid_deduction
+              ,r_first_aid_deduction_week_1
+              ,r_first_aid_deduction_week_1_hrs
+              ,r_first_aid_deduction_week_2
+              ,r_first_aid_deduction_week_2_hrs
+              ,r_first_aid_deduction_week_3
+              ,r_first_aid_deduction_week_3_hrs
+              ,r_first_aid_deduction_week_4
+              ,r_first_aid_deduction_week_4_hrs
+              ,r_first_aid_unit_offset
+              ,r_location_deduction
+              ,r_location_deduction_week_1
+              ,r_location_deduction_week_1_hrs
+              ,r_location_deduction_week_2
+              ,r_location_deduction_week_2_hrs
+              ,r_location_deduction_week_3
+              ,r_location_deduction_week_3_hrs
+              ,r_location_deduction_week_4
+              ,r_location_deduction_week_4_hrs
+              ,r_location_unit_offset
+              ,r_mrkt_supp_deduction
+              ,r_mrkt_supp_deduction_week_1
+              ,r_mrkt_supp_deduction_week_1_hrs
+              ,r_mrkt_supp_deduction_week_2
+              ,r_mrkt_supp_deduction_week_2_hrs
+              ,r_mrkt_supp_deduction_week_3
+              ,r_mrkt_supp_deduction_week_3_hrs
+              ,r_mrkt_supp_deduction_week_4
+              ,r_mrkt_supp_deduction_week_4_hrs
+              ,r_mrkt_supp_mgmt_deduction
+              ,r_mrkt_supp_mgmt_deduction_week_1
+              ,r_mrkt_supp_mgmt_deduction_week_1_hrs
+              ,r_mrkt_supp_mgmt_deduction_week_2
+              ,r_mrkt_supp_mgmt_deduction_week_2_hrs
+              ,r_mrkt_supp_mgmt_deduction_week_3
+              ,r_mrkt_supp_mgmt_deduction_week_3_hrs
+              ,r_mrkt_supp_mgmt_deduction_week_4
+              ,r_mrkt_supp_mgmt_deduction_week_4_hrs
+              ,r_mrkt_supp_mgmt_unit_offset
+              ,r_mrkt_supp_unit_offset
+              ,r_night_premium_deduction
+              ,r_night_premium_deduction_week_1
+              ,r_night_premium_deduction_week_1_hrs
+              ,r_night_premium_deduction_week_2
+              ,r_night_premium_deduction_week_2_hrs
+              ,r_night_premium_deduction_week_3
+              ,r_night_premium_deduction_week_3_hrs
+              ,r_night_premium_deduction_week_4
+              ,r_night_premium_deduction_week_4_hrs
+              ,r_night_premium_unit_offset
+              ,r_night_supp_deduction
+              ,r_night_supp_deduction_week_1
+              ,r_night_supp_deduction_week_1_hrs
+              ,r_night_supp_deduction_week_2
+              ,r_night_supp_deduction_week_2_hrs
+              ,r_night_supp_deduction_week_3
+              ,r_night_supp_deduction_week_3_hrs
+              ,r_night_supp_deduction_week_4
+              ,r_night_supp_deduction_week_4_hrs
+              ,r_night_supp_unit_offset
+              ,r_personal_rate_deduction
+              ,r_personal_rate_deduction_week_1
+              ,r_personal_rate_deduction_week_1_hrs
+              ,r_personal_rate_deduction_week_2
+              ,r_personal_rate_deduction_week_2_hrs
+              ,r_personal_rate_deduction_week_3
+              ,r_personal_rate_deduction_week_3_hrs
+              ,r_personal_rate_deduction_week_4
+              ,r_personal_rate_deduction_week_4_hrs
+              ,r_personal_rate_unit_offset
+              ,r_protected_ele_deduction
+              ,r_protected_ele_deduction_week_1
+              ,r_protected_ele_deduction_week_1_hrs
+              ,r_protected_ele_deduction_week_2
+              ,r_protected_ele_deduction_week_2_hrs
+              ,r_protected_ele_deduction_week_3
+              ,r_protected_ele_deduction_week_3_hrs
+              ,r_protected_ele_deduction_week_4
+              ,r_protected_ele_deduction_week_4_hrs
+              ,r_protected_ele_unit_offset
+              ,r_salary_deduction
+              ,r_salary_deduction_week_1
+              ,r_salary_deduction_week_1_hrs
+              ,r_salary_deduction_week_2
+              ,r_salary_deduction_week_2_hrs
+              ,r_salary_deduction_week_3
+              ,r_salary_deduction_week_3_hrs
+              ,r_salary_deduction_week_4
+              ,r_salary_deduction_week_4_hrs
+              ,r_salary_unit_offset
+              ,r_sun_premium_deduction
+              ,r_sun_premium_deduction_week_1
+              ,r_sun_premium_deduction_week_1_hrs
+              ,r_sun_premium_deduction_week_2
+              ,r_sun_premium_deduction_week_2_hrs
+              ,r_sun_premium_deduction_week_3
+              ,r_sun_premium_deduction_week_3_hrs
+              ,r_sun_premium_deduction_week_4
+              ,r_sun_premium_deduction_week_4_hrs
+              ,r_sun_premium_unit_offset
+              ,r_salary_periodicity
+              ,r_location_periodicity				
+              ,r_mrkt_supp_periodicity				
+              ,r_mrkt_supp_mgmt_periodicity
+              ,r_dep_supp_periodicity				
+              ,r_first_aid_periodicity				
+              ,r_night_supp_periodicity				
+              ,r_dist_supp_periodicity				
+              ,r_bank_hol_supp_periodicity				
+              ,r_protected_ele_periodicity			
+              ,r_personal_rate_periodicity			
+              ,r_night_premium_periodicity			
+              ,r_sun_premium_periodicity			
+              ,r_extra_night_periodicity			
+              ,r_bank_hol_premium_periodicity
+              ,r_salary_dir_card_id
+              ,r_location_dir_card_id				
+              ,r_mrkt_supp_dir_card_id				
+              ,r_mrkt_supp_mgmt_dir_card_id
+              ,r_dep_supp_dir_card_id				
+              ,r_first_aid_dir_card_id				
+              ,r_night_supp_dir_card_id				
+              ,r_dist_supp_dir_card_id				
+              ,r_bank_hol_supp_dir_card_id				
+              ,r_protected_ele_dir_card_id			
+              ,r_personal_rate_dir_card_id			
+              ,r_night_premium_dir_card_id			
+              ,r_sun_premium_dir_card_id			
+              ,r_extra_night_dir_card_id			
+              ,r_bank_hol_premium_dir_card_id
+              ,r_salary_dir_comp_id
+              ,r_location_dir_comp_id				
+              ,r_mrkt_supp_dir_comp_id				
+              ,r_mrkt_supp_mgmt_dir_comp_id
+              ,r_dep_supp_dir_comp_id				
+              ,r_first_aid_dir_comp_id				
+              ,r_night_supp_dir_comp_id				
+              ,r_dist_supp_dir_comp_id				
+              ,r_bank_hol_supp_dir_comp_id				
+              ,r_protected_ele_dir_comp_id			
+              ,r_personal_rate_dir_comp_id			
+              ,r_night_premium_dir_comp_id			
+              ,r_sun_premium_dir_comp_id			
+              ,r_extra_night_dir_comp_id			
+              ,r_bank_hol_premium_dir_comp_id
+              ,r_sun_supp_deduction												
+              ,r_sun_supp_deduction_week_1									
+              ,r_sun_supp_deduction_week_1_hrs								
+              ,r_sun_supp_deduction_week_2									
+              ,r_sun_supp_deduction_week_2_hrs								
+              ,r_sun_supp_deduction_week_3									
+              ,r_sun_supp_deduction_week_3_hrs								
+              ,r_sun_supp_deduction_week_4									
+              ,r_sun_supp_deduction_week_4_hrs								
+              ,r_sun_supp_dir_card_id											
+              ,r_sun_supp_dir_comp_id											
+              ,r_sun_supp_periodicity											
+              ,r_sun_supp_unit_offset											
+    )
+)
+/* End Formula Text */
