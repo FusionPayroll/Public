@@ -11,8 +11,8 @@ For a Salary element, the Salary and Periodicity are available in  element entry
 that is created by Oracle Fusion Compensation.
 This formula is created by Global Earnings template.
 dssdsd
-sdsd
 
+dddddd
 
  l_value               Direct Result for Earnings Pay Value. 
  l_reduce              Direct Result for Earnings Reduce Regular Earnings.
